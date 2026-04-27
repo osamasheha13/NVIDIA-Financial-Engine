@@ -54,4 +54,4 @@ This project follows a strict **Separation of Concerns** principle, ensuring tha
 ---
 
 ## 🧠 The "Why" behind the Project
-As a professional with a background in **Accounting** and **Data Engineering**, I built this system to solve the "chaos of data." In the corporate world, data is often raw and unstructured (Ore). This project proves that through structured engineering, we can refine that data into actionable, crystalline intelligence.
+As an **accounting** professional who self-studied **data engineering**, I built this system to solve the "chaos of data." In the corporate world, data is often raw and unstructured (Ore). This project proves that through structured engineering, we can refine that data into actionable, crystalline intelligence.
