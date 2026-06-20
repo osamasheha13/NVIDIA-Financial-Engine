@@ -19,6 +19,8 @@ are unchanged.
 ## Live Demo: https://nvidia-financial-engine.streamlit.app/ ## 
 *Interactive dashboard — explore NVIDIA's financial KPIs and run your own What-If scenarios in real time.*
 
+(First load may take 10–20 seconds as the app wakes up — Streamlit Cloud free tier sleeps when inactive.)
+
 ## How to run it locally
 
 ```bash
