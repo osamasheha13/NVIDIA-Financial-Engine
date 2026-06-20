@@ -16,6 +16,8 @@ are unchanged.
 - `App/crystal_layer.py` (Layer 3) — Streamlit dashboard reads from the same
   file. No connection string, no driver, no credentials.
 
+## Live Demo: https://nvidia-financial-engine.streamlit.app/ ## 
+
 ## How to run it locally
 
 ```bash
