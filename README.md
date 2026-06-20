@@ -52,7 +52,5 @@ Change `TICKER` at the top of `Core/ore_layer.py` and `Core/forge_layer.py`,
 then re-run both. Each ticker's rows are stored independently, so the
 database can hold many companies side by side without conflicts.
 
-## Refreshing data later
-
-Re-running `ore_layer.py` for a ticker deletes and replaces only that
-ticker's rows, so it's safe to re-run periodically to pull fresh financials.
+## 🧠 The "Why" behind the Project
+As an **accounting** professional who self-studied **data engineering**, I built this system to solve the "chaos of data." In the corporate world, data is often raw and unstructured (Ore). This project proves that through structured engineering, we can refine that data into actionable, crystalline intelligence.
