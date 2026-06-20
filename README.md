@@ -17,6 +17,7 @@ are unchanged.
   file. No connection string, no driver, no credentials.
 
 ## Live Demo: https://nvidia-financial-engine.streamlit.app/ ## 
+*Interactive dashboard — explore NVIDIA's financial KPIs and run your own What-If scenarios in real time.*
 
 ## How to run it locally
 
