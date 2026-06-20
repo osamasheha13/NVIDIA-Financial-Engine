@@ -3,10 +3,17 @@
 # Description  : Streamlit dashboard for financial KPI visualization
 #                and What-If scenario simulation.
 #                Styled with NVIDIA brand colors (black + green).
-# Dependencies : pip install streamlit pandas sqlalchemy pyodbc plotly
+# Dependencies : pip install streamlit pandas sqlalchemy plotly
+# ============================================================
+#
+# NOTE ON THIS VERSION: switched from SQL Server to a local SQLite
+# file (data/FinancialEngine.db) so the app can run on Streamlit
+# Community Cloud with zero server setup — the .db file is part of
+# the repo and ships with the deployment. All dashboard logic,
+# styling, and charts below are unchanged from the original design.
 # ============================================================
 
-import urllib
+import os
 
 import pandas as pd
 import plotly.graph_objects as go
@@ -233,15 +240,18 @@ st.markdown(f"""
 # DATABASE CONNECTION
 # ============================================================
 
+# Path to the SQLite file committed inside the repo's data/ folder.
+DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "data", "FinancialEngine.db")
+
+
 @st.cache_resource
 def get_engine():
-    params = urllib.parse.quote_plus(
-        "DRIVER={ODBC Driver 17 for SQL Server};"
-        "SERVER=localhost\\SQLEXPRESS;"
-        "DATABASE=FinancialEngineDB;"
-        "Trusted_Connection=yes;"
-    )
-    return create_engine(f"mssql+pyodbc:///?odbc_connect={params}", fast_executemany=True)
+    """
+    Connect to the local SQLite database file shipped inside the repo.
+    No server, no driver, no credentials — just a file on disk that
+    Streamlit Cloud reads the same way your machine does.
+    """
+    return create_engine(f"sqlite:///{DB_PATH}")
 
 
 # ============================================================
@@ -257,7 +267,7 @@ def load_data() -> pd.DataFrame:
     engine = get_engine()
     try:
         with engine.connect() as conn:
-            df = pd.read_sql(text("SELECT * FROM dbo.Fact_Internal_Metrics ORDER BY FiscalYear ASC"), conn)
+            df = pd.read_sql(text("SELECT * FROM Fact_Internal_Metrics ORDER BY FiscalYear ASC"), conn)
         return df
     except SQLAlchemyError as e:
         st.error(f"Database connection failed: {e}")
@@ -277,10 +287,7 @@ CHART_LAYOUT = dict(
     hoverlabel=dict(bgcolor=NVIDIA_GRAY, font_size=12, font_family="Barlow"),
 )
 
-# Default legend style — pass explicitly when needed
 LEGEND_STYLE = dict(bgcolor="rgba(0,0,0,0)", font=dict(size=11))
-
-# Reusable axis defaults — pass to fig.update_xaxes() / fig.update_yaxes()
 AXIS_STYLE = dict(gridcolor=NVIDIA_LGRAY, linecolor=NVIDIA_LGRAY, tickfont=dict(size=11))
 
 
@@ -448,7 +455,6 @@ def main():
     # ==================== TAB 1: PERFORMANCE ====================
     with tab1:
 
-        # KPI row
         st.markdown('<div class="section-header">Key Performance Indicators</div>', unsafe_allow_html=True)
         k1, k2, k3, k4, k5 = st.columns(5)
 
@@ -480,7 +486,6 @@ def main():
 
         st.markdown("")
 
-        # Charts row 1
         c1, c2 = st.columns(2)
         with c1:
             st.markdown('<div class="section-header">Revenue & Net Income</div>', unsafe_allow_html=True)
@@ -508,7 +513,6 @@ def main():
             )
             st.plotly_chart(fig, width='stretch')
 
-        # Charts row 2
         c3, c4 = st.columns(2)
         with c3:
             st.markdown('<div class="section-header">Free Cash Flow vs CAPEX</div>', unsafe_allow_html=True)
@@ -551,7 +555,6 @@ def main():
 
         st.markdown('<div class="section-header">Scenario Results — Most Recent Fiscal Year</div>', unsafe_allow_html=True)
 
-        # Scenario metric cards
         s1, s2, s3, s4 = st.columns(4)
 
         def delta_html(val):
@@ -593,7 +596,6 @@ def main():
 
         st.markdown("<br>", unsafe_allow_html=True)
 
-        # Waterfall + comparison bar
         w1, w2 = st.columns([3, 2])
 
         with w1:
@@ -625,7 +627,6 @@ def main():
             fig.update_yaxes(**AXIS_STYLE, title="$ Billions")
             st.plotly_chart(fig, width='stretch')
 
-        # Operating leverage insight
         st.markdown('<div class="section-header">Operating Leverage Sensitivity</div>', unsafe_allow_html=True)
         rev_scenarios  = [-30, -20, -10, 0, 10, 20, 30, 50]
         ni_outcomes    = [

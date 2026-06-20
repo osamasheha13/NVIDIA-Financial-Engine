@@ -1,13 +1,19 @@
 # ============================================================
-# Project      : Financial Data Engineering — Layer 2 (Silver)
+# Project      : Financial Data Engineering — Layer 2 (Forge / Silver)
 # Description  : Reads raw financial data from Layer 1 tables,
 #                computes KPIs and analytical metrics, and writes
 #                the results to the Fact_Internal_Metrics table.
-# Dependencies : pip install pandas sqlalchemy pyodbc
+# Dependencies : pip install pandas sqlalchemy
+# ============================================================
+#
+# NOTE ON THIS VERSION: switched from SQL Server to a local SQLite
+# file so the whole pipeline can run anywhere, including Streamlit
+# Community Cloud, with zero server setup. All KPI logic below is
+# unchanged from the original design.
 # ============================================================
 
+import os
 import logging
-import urllib
 
 import pandas as pd
 from sqlalchemy import create_engine, text
@@ -31,12 +37,7 @@ logger = logging.getLogger(__name__)
 
 TICKER: str = "NVDA"   # <- Change target company here
 
-DB_CONFIG: dict = {
-    "driver":             "{ODBC Driver 17 for SQL Server}",
-    "server":             "localhost\\SQLEXPRESS",
-    "database":           "FinancialEngineDB",
-    "trusted_connection": "yes",
-}
+DB_PATH: str = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data", "FinancialEngine.db")
 
 OUTPUT_TABLE: str = "Fact_Internal_Metrics"
 
@@ -47,21 +48,11 @@ OUTPUT_TABLE: str = "Fact_Internal_Metrics"
 
 def get_engine():
     """
-    Build and return a SQLAlchemy engine for SQL Server via pyodbc.
-    Uses Windows Authentication (Trusted_Connection=yes).
+    Build and return a SQLAlchemy engine for the local SQLite file.
+    Same .db file used by Layer 1 — no separate setup needed.
     """
-    odbc_str = (
-        f"DRIVER={DB_CONFIG['driver']};"
-        f"SERVER={DB_CONFIG['server']};"
-        f"DATABASE={DB_CONFIG['database']};"
-        f"Trusted_Connection={DB_CONFIG['trusted_connection']};"
-    )
-    params = urllib.parse.quote_plus(odbc_str)
-    engine = create_engine(
-        f"mssql+pyodbc:///?odbc_connect={params}",
-        fast_executemany=True,
-    )
-    logger.info("Engine created -> %s / %s", DB_CONFIG["server"], DB_CONFIG["database"])
+    engine = create_engine(f"sqlite:///{DB_PATH}")
+    logger.info("Engine created -> %s", DB_PATH)
     return engine
 
 
@@ -93,10 +84,10 @@ EXTRACTION_QUERY = """
         c.CapitalExpenditures,
         c.FreeCashFlow
 
-    FROM      dbo.Raw_IncomeStatement  i
-    JOIN      dbo.Raw_BalanceSheet     b
+    FROM      Raw_IncomeStatement  i
+    JOIN      Raw_BalanceSheet     b
         ON    i.Ticker = b.Ticker AND i.FiscalYear = b.FiscalYear
-    JOIN      dbo.Raw_CashFlow         c
+    JOIN      Raw_CashFlow         c
         ON    i.Ticker = c.Ticker AND i.FiscalYear = c.FiscalYear
     WHERE     i.Ticker = :ticker
     ORDER BY  i.FiscalYear ASC;
@@ -156,70 +147,37 @@ def compute_metrics(df: pd.DataFrame) -> pd.DataFrame:
     # ----------------------------------------------------------
     # 1. PROFITABILITY MARGINS
     # ----------------------------------------------------------
-
-    # Gross Margin: how much revenue remains after direct costs
     df["Gross_Margin_Pct"] = df["GrossProfit"] / df["TotalRevenue"]
-
-    # Operating Margin: profitability from core operations
     df["Operating_Margin_Pct"] = df["OperatingIncome"] / df["TotalRevenue"]
-
-    # Net Profit Margin: bottom-line profitability
     df["Net_Margin_Pct"] = df["NetIncome"] / df["TotalRevenue"]
 
     # ----------------------------------------------------------
     # 2. ASSET EFFICIENCY & TURNOVER
     # ----------------------------------------------------------
-
-    # Asset Turnover: revenue generated per dollar of assets
     df["Asset_Turnover"] = df["TotalRevenue"] / df["TotalAssets"]
-
-    # Inventory to Revenue: measures inventory build-up relative to sales
     df["Inventory_to_Revenue"] = df["Inventory"] / df["TotalRevenue"]
-
-    # Return on Equity (ROE): net income relative to shareholders equity
     df["ROE"] = df["NetIncome"] / df["TotalStockholdersEquity"]
-
-    # Return on Assets (ROA): how efficiently assets generate profit
     df["ROA"] = df["NetIncome"] / df["TotalAssets"]
-
-    # Debt to Equity Ratio: financial leverage indicator
     df["Debt_to_Equity"] = df["TotalLiabilities"] / df["TotalStockholdersEquity"]
 
     # ----------------------------------------------------------
     # 3. CASH FLOW QUALITY
     # ----------------------------------------------------------
-
-    # FCF Margin: free cash flow as a percentage of revenue
     df["FCF_Margin"] = df["FreeCashFlow"] / df["TotalRevenue"]
-
-    # Cash Flow Conversion: how much operating income converts to operating cash
     df["CF_Conversion"] = df["OperatingCashFlow"] / df["OperatingIncome"]
-
-    # CAPEX Intensity: capital expenditure relative to revenue
     df["Capex_Intensity"] = df["CapitalExpenditures"].abs() / df["TotalRevenue"]
 
     # ----------------------------------------------------------
     # 4. YoY GROWTH RATES
     # ----------------------------------------------------------
-
-    # Revenue growth year-over-year
     df["Revenue_Growth_YoY"] = df["TotalRevenue"].pct_change()
-
-    # Net income growth year-over-year
     df["NetIncome_Growth_YoY"] = df["NetIncome"].pct_change()
-
-    # Free cash flow growth year-over-year
     df["FCF_Growth_YoY"] = df["FreeCashFlow"].pct_change()
 
     # ----------------------------------------------------------
     # 5. WHAT-IF SCENARIO DRIVERS
     # ----------------------------------------------------------
-
-    # Variable Cost Ratio: proportion of revenue consumed by variable costs (COGS)
     df["Variable_Cost_Ratio"] = df["CostOfRevenue"] / df["TotalRevenue"]
-
-    # Operating Leverage: sensitivity of operating income to revenue changes
-    # Higher ratio = higher fixed cost base = more sensitive to revenue swings
     df["Operating_Leverage"] = df["GrossProfit"] / df["OperatingIncome"]
 
     logger.info("  Computed %d KPI columns.", len(df.columns))
@@ -244,10 +202,10 @@ def load_silver_layer(engine, df: pd.DataFrame) -> None:
         return
 
     try:
-        df.to_sql(OUTPUT_TABLE, engine, schema="dbo", if_exists="replace", index=False)
-        logger.info("  Written %d rows -> dbo.%s", len(df), OUTPUT_TABLE)
+        df.to_sql(OUTPUT_TABLE, engine, if_exists="replace", index=False)
+        logger.info("  Written %d rows -> %s", len(df), OUTPUT_TABLE)
     except SQLAlchemyError as exc:
-        logger.error("  Failed to write dbo.%s: %s", OUTPUT_TABLE, exc)
+        logger.error("  Failed to write %s: %s", OUTPUT_TABLE, exc)
         raise
 
 
@@ -288,10 +246,10 @@ def run_audit(df: pd.DataFrame) -> None:
 def run_silver_pipeline() -> None:
     """
     Execute the full Layer 2 (Silver) transformation pipeline:
-        1. Connect to SQL Server
+        1. Connect to SQLite
         2. Extract joined raw data from Layer 1 tables
         3. Compute KPIs and analytical metrics
-        4. Write results to dbo.Fact_Internal_Metrics
+        4. Write results to Fact_Internal_Metrics
         5. Print audit preview
     """
     ticker = TICKER.upper().strip()
@@ -300,19 +258,10 @@ def run_silver_pipeline() -> None:
     logger.info("Starting Layer 2 (Silver) pipeline for: %s", ticker)
     logger.info("=" * 55)
 
-    # Step 1: Connect
     engine = get_engine()
-
-    # Step 2: Extract
     df_raw = extract_raw_data(engine, ticker)
-
-    # Step 3: Compute metrics
     df_enriched = compute_metrics(df_raw)
-
-    # Step 4: Load to Silver Layer
     load_silver_layer(engine, df_enriched)
-
-    # Step 5: Audit preview
     run_audit(df_enriched)
 
     logger.info("=" * 55)

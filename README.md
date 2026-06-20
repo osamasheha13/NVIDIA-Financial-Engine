@@ -1,57 +1,58 @@
-# 💎 Refining Path: Enterprise Financial Intelligence Suite (NVDA Edition)
+# NVIDIA Financial Intelligence Platform — SQLite Edition
 
-> **"Transforming raw financial noise into executive crystal insights through a multi-layered engineering approach."**
+This is the deployable version of the 3-layer financial analysis pipeline,
+adapted from SQL Server to SQLite so it can run on Streamlit Community Cloud
+with zero server setup.
 
----
+## What changed from the original
 
-## 🚀 Overview
-The **Refining Path** is a modular Data Engineering and Financial Analysis system designed to automate the extraction, processing, and visualization of corporate financial data. Built with a robust three-layer architecture, it provides an institutional-grade "What-If" simulator to stress-test financial performance against macroeconomic and operational shifts.
+Only the database layer. All KPI logic, chart code, and dashboard styling
+are unchanged.
 
-## 🏗️ The Three-Layer Architecture (The Core Philosophy)
-This project follows a strict **Separation of Concerns** principle, ensuring that business logic is decoupled from data storage and user interface.
+- `Core/ore_layer.py` (Layer 1) — fetches from yfinance, writes to a local
+  SQLite file at `data/FinancialEngine.db` instead of SQL Server.
+- `Core/forge_layer.py` (Layer 2) — reads from that same file, computes KPIs,
+  writes the Silver layer table back into it.
+- `App/crystal_layer.py` (Layer 3) — Streamlit dashboard reads from the same
+  file. No connection string, no driver, no credentials.
 
-### 1. 🪨 The Ore Layer (Extraction)
-- **Source:** Direct integration with Yahoo Finance API.
-- **Process:** Automated extraction of Balance Sheets, Income Statements, and Cash Flow data.
-- **Persistence:** Raw data is cleaned and injected into an **MS SQL Server** environment.
+## How to run it locally
 
-### 2. ⚒️ The Forge Layer (Logic & Transformation)
-- **Engine:** Advanced SQL-based views and Python logic processors.
-- **Metrics:** Calculation of complex financial KPIs (Operating Leverage, FCF Intensity, Inventory Turnover, and ROA/ROE).
-- **Scalability:** Built to handle multiple tickers; the engine recognizes any stored company automatically.
+```bash
+pip install -r requirements.txt
 
-### 3. 💎 The Crystal Layer (Visualization)
-- **Platform:** Streamlit-powered Executive Dashboard.
-- **NVIDIA Brand Identity:** Custom UI/UX styled with professional dark/light themes.
-- **Dynamic Simulator:** An interactive "What-If" engine allowing executives to simulate revenue growth, cost fluctuations, and CapEx intensity in real-time.
+# Step 1: pull and store NVDA's financials
+python Core/ore_layer.py
 
----
+# Step 2: compute KPIs
+python Core/forge_layer.py
 
-## 🛠️ Tech Stack
-- **Languages:** Python (Pandas, SQLAlchemy)
-- **Database:** Microsoft SQL Server (Transact-SQL)
-- **Frontend:** Streamlit & Plotly (Custom CSS Injection)
-- **Financial Data:** yfinance API
+# Step 3: launch the dashboard
+streamlit run App/crystal_layer.py
+```
 
----
+After step 2, `data/FinancialEngine.db` contains everything the dashboard
+needs. That file is what makes deployment possible — once it exists, no
+internet connection or live data fetch is required to view the dashboard.
 
-## 📈 Key Features
-- **Scalable Design:** Add new companies to the database without changing a single line of UI code.
-- **Executive Simulator:** Real-time impact analysis of net income based on variable and fixed cost shifts.
-- **Modular Structure:**
-    - `Data/`: Secure storage for SQL assets.
-    - `Core/`: The brain of the system (Extraction & Logic).
-    - `App/`: The visual interface (Crystal Layer).
+## How to deploy on Streamlit Community Cloud
 
----
+1. Run steps 1 and 2 above on your machine once, so `data/FinancialEngine.db`
+   is generated.
+2. Commit that `.db` file to the repo (don't gitignore the `data/` folder).
+3. Push everything to GitHub.
+4. Go to [share.streamlit.io](https://share.streamlit.io), connect this repo,
+   and set the main file path to `App/crystal_layer.py`.
+5. Deploy. The app reads the committed `.db` file directly — no setup needed
+   on Streamlit's side.
 
-## ⚡ Quick Start
-1. **Setup Database:** Run the SQL scripts in `/Data` to initialize the FinancialEngineDB.
-2. **Install Dependencies:** `pip install -r requirements.txt`
-3. **Run Extraction:** `python Core/ore_layer.py`
-4. **Launch Dashboard:** `streamlit run App/crystal_layer.py`
+## Adding more companies
 
----
+Change `TICKER` at the top of `Core/ore_layer.py` and `Core/forge_layer.py`,
+then re-run both. Each ticker's rows are stored independently, so the
+database can hold many companies side by side without conflicts.
 
-## 🧠 The "Why" behind the Project
-As a professional with a background in **Accounting** and **Data Engineering**, I built this system to solve the "chaos of data." In the corporate world, data is often raw and unstructured (Ore). This project proves that through structured engineering, we can refine that data into actionable, crystalline intelligence.
+## Refreshing data later
+
+Re-running `ore_layer.py` for a ticker deletes and replaces only that
+ticker's rows, so it's safe to re-run periodically to pull fresh financials.
